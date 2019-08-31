@@ -1,4 +1,6 @@
 .DS_Store
 __pycache__
-wifi.json
 wifi*.json
+config.json
+cmd.exe.lnk
+tilda_tools.bat

@@ -11,9 +11,6 @@ $ tilda_tools reset
 Soft reboot badge and start specific app
 $ tilda_tools reset --boot my_app
 
-Update files on the badge to match the current local version, restarts afterwards
-$ tilda_tools sync
-
 Update files in folder(s) to match current local version
 $ tilda_tools sync my_game shared
 $ tilda_tools sync <pattern1> <pattern2> ...
@@ -64,6 +61,7 @@ def main():
     cmd_parser.add_argument('-b', '--baudrate', default=115200, help='the baud rate of the serial device')
     cmd_parser.add_argument('-v', '--verbose', action='store_true', help='adds more output')
     cmd_parser.add_argument('--skip-wifi', action='store_true', help='does not sync wifi.json')
+    cmd_parser.add_argument('--bootstrapped-apps', action='store_true', help='[Sync] only bootstrapped apps by default')
     cmd_parser.add_argument('--print_resources', action='store_true', help='prints resources in json')
     cmd_parser.add_argument('--boot', help='defines which app to boot into after reboot')
     cmd_parser.add_argument('--run', help='like run, but after a sync')
@@ -109,7 +107,8 @@ def main():
         if command == "test":
             command = "sync"
             if len(args.paths) == 0:
-                args.paths = ["lib/test_*"]
+                print("Please define an app or lib to sync: tilda_tools sync my_app\n")
+                sys.exit(1)
             else:
                 args.paths = ["lib/test_%s.py" % p for p in args.paths]
 
@@ -122,9 +121,20 @@ def main():
         pyboard_util.hard_reset(args)
 
     if command == "sync":
+        paths = args.paths if len(args.paths) else None
+        if args.bootstrapped_apps:
+            for k,val in list(resources.items()):
+                requested = paths and k in paths
+                bootstrapped = val.get("bootstrapped", False)
+                if val.get("type", None) == "app":
+                    if not (bootstrapped or (paths and requested)):
+                        # App is not in the bootstrap list, and isn't explicitly requested
+                        if args.verbose:
+                            print("Removing app '{0}' from sync list".format(k))
+                        del resources[k]
+
         if args.clean:
             sync.clean(args)
-        paths = args.paths if len(args.paths) else None
         synced_resources = sync.sync(args, paths, resources, args.verbose, args.skip_wifi)
 
     if (command in ["reset", "sync"]) or run_tests:

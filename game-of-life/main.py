@@ -1,11 +1,11 @@
 """Game of Life"""
 
-___name___         = "Conway game of life"
+___title___        = "Conway game of life"
 ___license___      = "MIT"
 ___categories___   = ["Games"]
-___dependencies___ = ["app", "ugfx_helper", "random", "sleep", "buttons"]
+___dependencies___ = ["app", "ugfx_helper", "sleep", "buttons"]
 
-import ugfx, ugfx_helper, buttons, sleep, time, random
+import app, ugfx, ugfx_helper, buttons, sleep, time, random
 from tilda import Buttons
 
 
@@ -14,12 +14,12 @@ class Board:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.data = [random.randint(0, 1) for x in range(width * height)]
+        self.data = [random.randint(0,1) for x in range(width * height)]
 
     def __str__(self):
         res  = "w: {}  h: {}".format(self.width, self.height)
         for j in range(0, self.height):
-            row = [self.value(i, j) for i in range(0, self.width)]
+            row = [self.value(i, j) for i in range(self.width)]
             res = res + "\n" + row
         return res
 
@@ -36,7 +36,7 @@ class Board:
                 for neighbCoord in neighbCoords if neighbCoord != (x, y) ]
 
     # returns the new value of a given cell
-    def updateCell(self, x, y):
+    def nextValue(self, x, y):
         neighbsArr = self.neighbours(x, y)
         liveNeighbs = 0
         for neighb in neighbsArr:
@@ -57,11 +57,9 @@ class Board:
             else:
                 return 0    # dies
         
-    # update the board data in place by creating a new board with the updated cells and then swaping it
+    # update the board data in place
     def step(self):
-        allCoords = [(x, y) for x in range(0, self.width) for y in range(0, self.height)]
-        updatedData = [self.updateCell(c[0], c[1]) for c in allCoords]
-        self.data = updatedData
+        self.data = [self.nextValue(x, y) for x in range(self.width) for y in range(self.height)]
 
 
 
@@ -72,21 +70,21 @@ ugfx.clear()
 
 
 grid_size = 5
-grid_width = ugfx.width() / grid_size
-grid_height = ugfx.height() / grid_size
-alive_colour = ugfx.WHITE
+grid_width = round(ugfx.width() / grid_size)
+grid_height = round(ugfx.height() / grid_size)
+alive_colours = [ugfx.WHITE, ugfx.GRAY, ugfx.BLUE, ugfx.RED, ugfx.GREEN, ugfx.YELLOW, ugfx.ORANGE]
 dead_colour = ugfx.BLACK
 
 def displayCell(x, y, alive):
     if(alive):
-        colour = alive_colour
+        colour = alive_colours[random.randrange(len(alive_colours))]
     else:
         colour = dead_colour
-    ugfx.area((x+1)*grid_size, (y+1)*grid_size, grid_size, grid_size, colour)
+    ugfx.area(x*grid_size, y*grid_size, grid_size, grid_size, colour)
 
 
 def displayBoard(board):
-    coords = [(x, y) for x in range(0, board.x) for y in range(0, board.y)]
+    coords = [(x, y) for x in range(board.width) for y in range(board.height)]
     for (x, y) in coords:
         displayCell(x, y, board.value(x, y))
     
@@ -95,9 +93,9 @@ def displayBoard(board):
 
 board = Board(grid_width, grid_height)
 while True:
-    board.step()
     displayBoard(board)
-    time.sleep(1)
+    board.step()
+    #time.sleep(1)
 
     sleep.wfi()
     if buttons.is_triggered(Buttons.BTN_Menu):

@@ -1,6 +1,6 @@
 """SMS app for reading and sending messages
 """
-___name___         = "SMS"
+___title___         = "SMS"
 ___license___      = "MIT"
 ___dependencies___ = ["app", "dialogs", "sim800", "ugfx_helper"]
 ___categories___   = ["System"]
@@ -24,8 +24,8 @@ def send_message():
     number = ""
     message = ""
     while True:
-        num = prompt_text("Number to message:", init_text=number)
-        if num is None:
+        number = prompt_text("Number to message:", init_text=number, numeric=True)
+        if number is None:
             return
         message = prompt_text("Message:", init_text=message)
         if message is not None:
