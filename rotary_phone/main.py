@@ -122,8 +122,8 @@ def updateBell(currentTimeMs):
     
 
 # Change freq of ring
-pinJoystickUp = Pin(Pin.GPIO_JOYU, Pin.IN) # PullUp, RisingEdge
-pinJoystickDown = Pin(Pin.GPIO_JOYD, Pin.IN) # PullUp, RisingEdge       
+pinJoystickUp = Pin(Pin.GPIO_JOYU, Pin.IN)
+pinJoystickDown = Pin(Pin.GPIO_JOYD, Pin.IN) # PullDown, RisingEdge       
 
 def callbackJoystickUp(p):
     global bellFreqHz
@@ -143,8 +143,24 @@ pinJoystickDown.irq(handler=callbackJoystickDown)
 
 
 ##### PHONE #####
-sim800.poweron()
+print("START")
+#sim800.poweroff()
+# sim800.poweron()
+# sim800.ringervolume(50)
+# sim800.btpoweron()
+# sim800.btvisible(True)
+# sim800.btname("phony")
+# sim800.btpair("S6")
+#print(sim800.speakervolume(100))
+print(sim800.btvoicevolume(5))
+print("DONE")
 def updatePhone():
+    # print("+++")
+    # print(sim800.btstatus())
+    # print(sim800.btscan())
+    # print(sim800.btpaired())
+    # print(sim800.btconnected())
+    # time.sleep(3)
     global ringBell
     if sim800.isringing():
         ringBell = True
@@ -161,6 +177,19 @@ def updateBattery(currentTimeMs):
         ugfx.area(5, 5, 140, 20, ugfx.GRAY)
         ugfx.text(5, 5, "Batt " + str(battery()) + "%" , ugfx.BLUE)
         timeLastBatteryRefresh = currentTimeMs
+
+
+
+##### BlueTooth ON/OFF #####
+pinBTOnOff = Pin(Pin.GPIO_FET, Pin.OUT)
+timeLastToggle = 0
+def updateBTOnOff(currentTimeMs):
+    global timeLastToggle
+    if(currentTimeMs - timeLastToggle > 5000):
+        pinBTOnOff.value(not pinBTOnOff.value())
+        timeLastToggle = currentTimeMs
+
+
 
 
 
@@ -183,6 +212,8 @@ while True:
     updatePhone()
 
     updateBattery(currentTimeMs)
+
+    updateBTOnOff(currentTimeMs)
     
 
 
