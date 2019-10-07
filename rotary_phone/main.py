@@ -16,6 +16,8 @@ from homescreen import *
 
 
 
+
+
 ##### DIALING #####
 dialing = False
 currentNumber = ""
@@ -122,45 +124,32 @@ def updateBell(currentTimeMs):
     
 
 # Change freq of ring
-pinJoystickUp = Pin(Pin.GPIO_JOYU, Pin.IN)
-pinJoystickDown = Pin(Pin.GPIO_JOYD, Pin.IN) # PullDown, RisingEdge       
-
-def callbackJoystickUp(p):
-    global bellFreqHz
-    if(bellFreqHz < 80):
-        bellFreqHz = bellFreqHz + 1
+pinJoystickDown = Pin(Pin.GPIO_JOYD, Pin.IN) # PullDown, BothEdges       
 
 def callbackJoystickDown(p):
     global bellFreqHz
-    if(bellFreqHz > 1):
-        bellFreqHz = bellFreqHz - 1
-    
+    if(bellFreqHz > 10):
+        bellFreqHz = bellFreqHz - 10
+    else:
+        bellFreqHz = 80
 
 # external interrupts from the Joystick
-pinJoystickUp.irq(handler=callbackJoystickUp)
 pinJoystickDown.irq(handler=callbackJoystickDown)
 
 
 
 ##### PHONE #####
-print("START")
-#sim800.poweroff()
-# sim800.poweron()
+print("INIT PHONE START")
+sim800.poweron()
 # sim800.ringervolume(50)
-# sim800.btpoweron()
+sim800.btpoweron()
 # sim800.btvisible(True)
 # sim800.btname("phony")
 # sim800.btpair("S6")
-#print(sim800.speakervolume(100))
-print(sim800.btvoicevolume(5))
-print("DONE")
+sim800.btconnect(sim800.btPairedIdForName("S6"), 6)
+print("INIT PHONE DONE")
+
 def updatePhone():
-    # print("+++")
-    # print(sim800.btstatus())
-    # print(sim800.btscan())
-    # print(sim800.btpaired())
-    # print(sim800.btconnected())
-    # time.sleep(3)
     global ringBell
     if sim800.isringing():
         ringBell = True
@@ -181,15 +170,40 @@ def updateBattery(currentTimeMs):
 
 
 ##### BlueTooth ON/OFF #####
-pinBTOnOff = Pin(Pin.GPIO_FET, Pin.OUT)
-timeLastToggle = 0
-def updateBTOnOff(currentTimeMs):
-    global timeLastToggle
-    if(currentTimeMs - timeLastToggle > 5000):
-        pinBTOnOff.value(not pinBTOnOff.value())
-        timeLastToggle = currentTimeMs
+pinBTHeadsetOnOff = Pin(Pin.GPIO_FET, Pin.OUT)
+btHeadsetStatus = False
+btHeadsetLastTimeToggle = 0
+def updateBTHeadset(currentTimeMs):
+    global btHeadsetStatus, hookStatus, btHeadsetLastTimeToggle
+    if(currentTimeMs - btHeadsetLastTimeToggle > 3000): # don't do anything more often than that as it takes 3secs for the BT headset to start/stop
+        if(pinBTHeadsetOnOff.value()): #we started a toggle 3secs ago time to stop
+            pinBTHeadsetOnOff.off()
+            if(btHeadsetStatus): #if we've just turned on the headset -> pair and connect
+                #sim800.btpair(1)
+                sim800.btconnect(1, 6) 
+        elif((hookStatus != btHeadsetStatus) or (sim800.isringing() and (not btHeadsetStatus))):
+            pinBTHeadsetOnOff.on() #enable but just for 3 secs to TOGGLE the BT headset
+            btHeadsetStatus = not btHeadsetStatus
+            btHeadsetLastTimeToggle = currentTimeMs
+        
 
 
+
+
+##### HOOK On/Off #####
+pinHook = Pin(Pin.GPIO_JOYU, Pin.IN) # PullDown, BothEdges  
+hookStatus = False
+hookTimeLastToggle = 0
+def updateHook(currentTimeMs):
+    global hookStatus, hookTimeLastToggle
+    if(currentTimeMs - hookTimeLastToggle > 100):
+        newHookStatus = pinHook.value()
+        if(newHookStatus != hookStatus):
+            hookStatus = newHookStatus
+            hookTimeLastToggle = currentTimeMs
+            print("Hook: " + str(hookStatus))
+            if(hookStatus and sim800.isringing()):
+                sim800.answer()
 
 
 
@@ -213,7 +227,9 @@ while True:
 
     updateBattery(currentTimeMs)
 
-    updateBTOnOff(currentTimeMs)
+    updateBTHeadset(currentTimeMs)
+
+    updateHook(currentTimeMs)
     
 
 
