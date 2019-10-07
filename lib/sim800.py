@@ -392,7 +392,7 @@ def ringtone(alert=None,preview=False):
     # Return the surrent setting
     return int(current)
 
-# Play a tone though the SIM800 (MHz and ms)
+# Play a tone through the SIM800 (MHz and ms)
 def playtone(freq=0,duration=2000,asyncro=True):
     if freq>0:
         command("AT+SIMTONE=1," + str(freq) + "," + str(duration) + ",0," + str(duration))
@@ -400,6 +400,17 @@ def playtone(freq=0,duration=2000,asyncro=True):
             time.sleep(duration/1000)
     else:
         command("AT+SIMTONE=0")
+
+# Play a PREDEFINED tone through the SIM800 (MHz and ms)
+# 0 - STOP, 1 Dial Tone, 2 Called Subscriber Busy, 3 Congestion, 4 Radio Path Acknowledge, 5 Radio Path Not available / Call Dropped, 6 Error / Special information, 7 Call Waiting Tone, 8 Ringing Tone, 16 General Beep, 17 Positive Acknowledgement Tone, 18 Negative Acknowledgement or Error Tone, 19 Indian Dial Tone, 20 American Dial Tone
+def playpredeftone(tone=1,duration=2000,asyncro=True):
+    if tone>0:
+        command("AT+STTONE=1," + str(tone) + "," + str(duration))
+        if not asyncro:
+            time.sleep(duration/1000)
+    else:
+        command("AT+STTONE=0")
+
 
 # Record audio (id=1-10)
 def startrecording(id=1, length=None):
@@ -431,7 +442,7 @@ def listrecordings():
     result = []
     for entry in responselist:
         splitentry = entry.split(",")
-        result.append([splitentry[1], splitentry[2]])
+        result.append((splitentry[1], splitentry[2]))
     return result
 
 # Is the battery charging (0=no, 1=yes, 2=full)
@@ -565,7 +576,7 @@ def btscan(timeout=30000):
     response = command("AT+BTSCAN=1," + str(int(timeout/1000)), timeout+8000, "+BTSCAN: 1")
     for entry in extractvals("+BTSCAN: 0,", response):
         splitentry = entry.split(",")
-        result.append([int(splitentry[0]), splitentry[1].strip("\""), splitentry[2], int(splitentry[3])])
+        result.append((int(splitentry[0]), splitentry[1].strip("\""), splitentry[2], int(splitentry[3])))
     return result
 
 # Get the requesting paring device name
@@ -610,14 +621,24 @@ def btpairreject():
 def btunpair(device=0):
     return command("AT+BTUNPAIR=" + str(device), 8000)
 
+
+
 # List the paired Bluetooth devices
 def btpaired():
     result = []
     response = command("AT+BTSTATUS?")
     for entry in extractvals("P:", response):
         splitentry = entry.split(",")
-        result = [int(splitentry[0]), splitentry[1].strip("\""), splitentry[2]]
+        result.append((int(splitentry[0]), splitentry[1].strip("\""), splitentry[2]))
     return result
+
+def btPairedIdForName(btDeviceName):
+    pairedIdsWithGivenName = list(map(lambda e: e[0], filter(lambda e: e[1] == btDeviceName, btpaired())))
+    if pairedIdsWithGivenName:
+        return pairedIdsWithGivenName[0]
+    else:
+        return None
+
 
 # List profiles supported by a paired device
 def btgetprofiles(device):
@@ -656,7 +677,7 @@ def btconnected():
     response = command("AT+BTSTATUS?")
     for entry in extractvals("C:", response):
         splitentry = entry.split(",")
-        result = [int(splitentry[0]), splitentry[1].strip("\""), splitentry[2]]
+        result.append((int(splitentry[0]), splitentry[1].strip("\""), splitentry[2]))
     return result
 
 # Push an OPP object/file over Bluetooth (must be paired for OPP, monitor +BTOPPPUSH: for sucsess / fail / server issue)
@@ -742,7 +763,7 @@ def btvoicevolume(gain=None):
     return int(extractval("+BTVGS:", response, 0))
 
 # Get/Set microphone gain volume (0-15)
-def btvoicevolume(gain=None):
+def btmicrophonevolume(gain=None):
     # Set the new leve if we have one to set
     if gain is not None:
         command("AT+BTVGM=" + str(gain))

@@ -5,13 +5,8 @@ ___license___      = "MIT"
 ___dependencies___ = ["sleep", "app"]
 ___categories___   = ["EMF"]
 
-import ugfx, sleep, app, sim800
-from app import *
-from dialogs import *
-import ugfx
-import ugfx_helper
+import ugfx, utime, sim800
 from machine import Pin
-import utime
 from homescreen import *
 
 
@@ -28,29 +23,7 @@ lastDigit = -1
 pinDialStart = Pin(Pin.GPIO_JOYL, Pin.IN) # PullDown, BothEdges
 pinDialPulse = Pin(Pin.GPIO_JOYR, Pin.IN) # PullUp, BothEdges
 timeLastStart = utime.ticks_ms()
-timeLastPulse = utime.ticks_ms()
-
-'''
-def callbackDialStart(p):
-    global pinDialStart, timeLastStart, timeLastPulse, dialing, currentNumber, lastDigit
-    currentTimeMs = utime.ticks_ms()
-    # debounce
-    if(currentTimeMs - timeLastStart > 300 and currentTimeMs - timeLastPulse > 100):
-        if(pinDialStart.value() == 1 and dialing == False):
-            dialing = True
-            lastDigit = -1
-            timeLastStart = currentTimeMs
-            print("Dial START:  /  " + str(currentTimeMs))
-        elif (pinDialStart.value() == 0 and dialing == True and lastDigit >= 0):
-            dialing = False
-            lastDigit = lastDigit + 1
-            if(lastDigit >= 10):
-                lastDigit = lastDigit - 10
-            currentNumber = currentNumber + str(lastDigit)
-            timeLastStart = currentTimeMs
-            print("Dial STOP:  /  " + str(currentTimeMs))
-'''        
-    
+timeLastPulse = utime.ticks_ms()   
 
 
 def callbackDialPulse(p):
@@ -86,7 +59,15 @@ def updateDial(currentTimeMs):
             timeLastStart = currentTimeMs
             print("Dial STOP:  /  " + str(currentTimeMs))
 
-    ugfx.text(5, 60, currentNumber, ugfx.RED)
+            ugfx.area(5, 90, 120, 20, ugfx.WHITE)
+            ugfx.text(5, 90, currentNumber, ugfx.RED)
+
+    # after 3 secs from starting a number, take whatever we have and try dialing
+    if (len(currentNumber) > 0 and currentTimeMs - timeLastStart > 3000):
+        ugfx.area(120, 90, 240, 20, ugfx.WHITE)
+        ugfx.text(120, 90, "Calling...", ugfx.RED)
+        sim800.call(currentNumber)
+
 
 
 ##### RINGING #####
@@ -94,8 +75,11 @@ pinBellEnable = Pin(Pin.GPIO_ETHLED1, Pin.OUT)
 pinBell = Pin(Pin.GPIO_ETHLED0, Pin.OUT)
 timeLastBellMove = 0
 timeLastFreqRefresh = 0
-bellFreqHz = 70
+bellFreqHz1 = 70
+bellFreqHz2 = 30
+bellFreqHz = 1
 ringBell = False
+bellState = 0   # 0 - pause, 1 - ring freq1, 2 - ring freq2
 
 
 # it would be so much easier to do this witn PWM or a Timer callback !
@@ -110,13 +94,16 @@ def updateBell(currentTimeMs):
     else:
         pinBellEnable.off()
 
-    global timeLastFreqRefresh
+    global bellState, timeLastFreqRefresh, bellFreqHz1, bellFreqHz2
     # change the frequency and update display rarely
-    if(currentTimeMs - timeLastFreqRefresh > 2000):
-        if(bellFreqHz > 50):
-            bellFreqHz = bellFreqHz - 40
+    if(currentTimeMs - timeLastFreqRefresh > 1000):
+        bellState = (bellState + 1) % 3
+        if(bellState == 0):
+            bellFreqHz = 1
+        elif(bellState == 1):
+            bellFreqHz = bellFreqHz1
         else:
-            bellFreqHz = bellFreqHz + 40
+            bellFreqHz = bellFreqHz2
 
         ugfx.area(150, 5, 90, 20, ugfx.WHITE)
         ugfx.text(150, 5, "Ring " + str(bellFreqHz) + "Hz" , ugfx.RED)
@@ -140,54 +127,48 @@ pinJoystickDown.irq(handler=callbackJoystickDown)
 
 ##### PHONE #####
 print("INIT PHONE START")
+
 sim800.poweron()
-# sim800.ringervolume(50)
 sim800.btpoweron()
-# sim800.btvisible(True)
-# sim800.btname("phony")
-# sim800.btpair("S6")
-sim800.btconnect(sim800.btPairedIdForName("S6"), 6)
+
+# Start the Bluetooth Headset IF necessary
+if(not sim800.btconnected()):
+    print("BT Headset not connected")
+    pinBTHeadsetOnOff = Pin(Pin.GPIO_FET, Pin.OUT)
+    pinBTHeadsetOnOff.off() # take that Pin DOWN same as if someone was pressing the power button on the headset
+    utime.sleep(3)   #wait 3 secs for the BT Headset to start
+    pinBTHeadsetOnOff.on() #that was all now
+
+    sim800.btconnect(sim800.btPairedIdForName("S6"), 6)
+
 print("INIT PHONE DONE")
 
 def updatePhone():
-    global ringBell
+    global ringBell, hookStatus
     if sim800.isringing():
         ringBell = True
+        if hookStatus:
+            sim800.answer()
     else:
         ringBell = False
+        # status == 4 means call in progress
+        if ((not hookStatus) and (sim800.getstatus() == 4)):
+            sim800.hangup()
 
 
-
-##### BATTERY INFO #####
-timeLastBatteryRefresh = 0
-def updateBattery(currentTimeMs):
-    global timeLastBatteryRefresh
-    if(currentTimeMs - timeLastBatteryRefresh > 10000):
-        ugfx.area(5, 5, 140, 20, ugfx.GRAY)
-        ugfx.text(5, 5, "Batt " + str(battery()) + "%" , ugfx.BLUE)
-        timeLastBatteryRefresh = currentTimeMs
-
-
-
-##### BlueTooth ON/OFF #####
-pinBTHeadsetOnOff = Pin(Pin.GPIO_FET, Pin.OUT)
-btHeadsetStatus = False
-btHeadsetLastTimeToggle = 0
-def updateBTHeadset(currentTimeMs):
-    global btHeadsetStatus, hookStatus, btHeadsetLastTimeToggle
-    if(currentTimeMs - btHeadsetLastTimeToggle > 3000): # don't do anything more often than that as it takes 3secs for the BT headset to start/stop
-        if(pinBTHeadsetOnOff.value()): #we started a toggle 3secs ago time to stop
-            pinBTHeadsetOnOff.off()
-            if(btHeadsetStatus): #if we've just turned on the headset -> pair and connect
-                #sim800.btpair(1)
-                sim800.btconnect(1, 6) 
-        elif((hookStatus != btHeadsetStatus) or (sim800.isringing() and (not btHeadsetStatus))):
-            pinBTHeadsetOnOff.on() #enable but just for 3 secs to TOGGLE the BT headset
-            btHeadsetStatus = not btHeadsetStatus
-            btHeadsetLastTimeToggle = currentTimeMs
+##### General INFO : BATTERY & BT #####
+timeLastInfoRefresh = 0
+def updateGeneralInfo(currentTimeMs):
+    global timeLastInfoRefresh, hookStatus
+    if(currentTimeMs - timeLastInfoRefresh > 10000):
+        ugfx.area(5, 5, 120, 20, ugfx.GRAY)
+        ugfx.text(5, 5, "Batt " + str(battery()) + "%" , ugfx.WHITE)
+        connBtDeviceNames = list(map(lambda e: e[1], sim800.btconnected()))
+        ugfx.area(5, 30, 235, 20, ugfx.GRAY)
+        ugfx.text(5, 30, "Bt Cn " + str(connBtDeviceNames), ugfx.WHITE)
+        ugfx.text(120, 30, "Hk " + str(hookStatus), ugfx.WHITE)
+        timeLastInfoRefresh = currentTimeMs
         
-
-
 
 
 ##### HOOK On/Off #####
@@ -195,15 +176,18 @@ pinHook = Pin(Pin.GPIO_JOYU, Pin.IN) # PullDown, BothEdges
 hookStatus = False
 hookTimeLastToggle = 0
 def updateHook(currentTimeMs):
-    global hookStatus, hookTimeLastToggle
+    global hookStatus, hookTimeLastToggle, currentNumber
     if(currentTimeMs - hookTimeLastToggle > 100):
-        newHookStatus = pinHook.value()
+        newHookStatus = bool(pinHook.value())
         if(newHookStatus != hookStatus):
             hookStatus = newHookStatus
+            
+            currentNumber = ""  #reset number dialed
+            ugfx.area(5, 90, 235, 20, ugfx.WHITE)
+
             hookTimeLastToggle = currentTimeMs
             print("Hook: " + str(hookStatus))
-            if(hookStatus and sim800.isringing()):
-                sim800.answer()
+               
 
 
 
@@ -211,7 +195,8 @@ def updateHook(currentTimeMs):
 # initialize screen
 ugfx.init()
 ugfx.clear()
-ugfx.text(5, 30, "NUMBER", ugfx.BLACK)
+ugfx.backlight(0)
+ugfx.text(5, 60, "NUMBER", ugfx.BLACK)
 
 
 
@@ -225,15 +210,7 @@ while True:
 
     updatePhone()
 
-    updateBattery(currentTimeMs)
-
-    updateBTHeadset(currentTimeMs)
-
     updateHook(currentTimeMs)
     
+    updateGeneralInfo(currentTimeMs)
 
-
-
-# closing
-ugfx.clear()
-app.restart_to_default()
