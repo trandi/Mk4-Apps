@@ -15,6 +15,7 @@ from homescreen import *
 
 ##### DIALING #####
 dialing = False
+calling = False
 currentNumber = ""
 lastDigit = -1
 
@@ -23,49 +24,85 @@ lastDigit = -1
 pinDialStart = Pin(Pin.GPIO_JOYL, Pin.IN) # PullDown, BothEdges
 pinDialPulse = Pin(Pin.GPIO_JOYR, Pin.IN) # PullUp, BothEdges
 timeLastStart = utime.ticks_ms()
+timeFirstPulse = utime.ticks_ms() 
 timeLastPulse = utime.ticks_ms()   
 
 
 def callbackDialPulse(p):
-    global pinDialPulse, timeLastPulse, dialing, lastDigit
+    global pinDialPulse, timeFirstPulse, timeLastPulse, dialing, lastDigit
     if(dialing and pinDialPulse.value() == 0):
         currentTime = utime.ticks_ms()
-        print("Pulse: " + str(currentTime))
+        if(lastDigit < 0):
+            timeFirstPulse = currentTime
         # debounce
         if(currentTime - timeLastPulse > 40):
             lastDigit = lastDigit + 1
         timeLastPulse = currentTime
+        
     
+# empiric data, each range centered around mean/avg of empiric durations and is wider than 2 stdevs
+# duration between the 1st pulse and the last
+def digitByDuration(durationMs):
+    if(durationMs < 20):
+        return 1
+    elif(durationMs < 105):
+        return 2
+    elif(durationMs < 200):
+        return 3
+    elif(durationMs < 280):
+        return 4
+    elif(durationMs < 375):
+        return 5
+    elif(durationMs < 460):
+        return 6
+    elif(durationMs < 535):
+        return 7
+    elif(durationMs < 625):
+        return 8
+    elif(durationMs < 695):
+        return 9
+    else:
+        return 0
+
+
 
 # external interrupts from the dialer
 #pinDialStart.irq(handler=callbackDialStart)  # this is VERY NOISY, keeps getting triggered around pulses !
 pinDialPulse.irq(handler=callbackDialPulse)
 
-
 def updateDial(currentTimeMs):
-    global timeLastStart, dialing, currentNumber, lastDigit
+    global timeFirstPulse, timeLastPulse, timeLastStart, dialing, currentNumber, lastDigit, hookStatus, calling
     if(currentTimeMs - timeLastStart > 300 and currentTimeMs - timeLastPulse > 200):
         if(pinDialStart.value() == 1 and dialing == False):
             dialing = True
             lastDigit = -1
             timeLastStart = currentTimeMs
-            print("Dial START:  /  " + str(currentTimeMs))
         elif (pinDialStart.value() == 0 and dialing == True and lastDigit >= 0):
             dialing = False
             lastDigit = lastDigit + 1
             if(lastDigit >= 10):
                 lastDigit = lastDigit - 10
-            currentNumber = currentNumber + str(lastDigit)
+            # check the digit
+            digitDurationMs = timeLastPulse - timeFirstPulse
+            durationBasedLastDigit = digitByDuration(digitDurationMs)
+            # DURATION based digit is much more RELIABLE !  (all interrupts/callback code for not much... :) ) 
+            currentNumber = currentNumber + str(durationBasedLastDigit)
             timeLastStart = currentTimeMs
-            print("Dial STOP:  /  " + str(currentTimeMs))
+            print("Dialled DIGIT: " + str(lastDigit))
+            if(lastDigit != durationBasedLastDigit):
+                print(" !!!! Digit mismatch. From duration: " + str(durationBasedLastDigit) + " / " + str(digitDurationMs) + "ms")
 
+            print("# " + currentNumber)
             ugfx.area(5, 90, 120, 20, ugfx.WHITE)
             ugfx.text(5, 90, currentNumber, ugfx.RED)
 
+    #returns 0=ready, 2=unknown, 3=ringing, 4=call in progress
     # after 3 secs from starting a number, take whatever we have and try dialing
-    if (len(currentNumber) > 0 and currentTimeMs - timeLastStart > 3000):
+    if ((not calling) and hookStatus and sim800.getstatus() == 0 and len(currentNumber) > 0 and currentTimeMs - timeLastStart > 3000):
+        calling = True
         ugfx.area(120, 90, 240, 20, ugfx.WHITE)
         ugfx.text(120, 90, "Calling...", ugfx.RED)
+        print("Calling... " + str(currentNumber))
         sim800.call(currentNumber)
 
 
@@ -144,7 +181,7 @@ if(not sim800.btconnected()):
 print("INIT PHONE DONE")
 
 def updatePhone():
-    global ringBell, hookStatus
+    global ringBell, hookStatus, calling
     if sim800.isringing():
         ringBell = True
         if hookStatus:
@@ -154,6 +191,7 @@ def updatePhone():
         # status == 4 means call in progress
         if ((not hookStatus) and (sim800.getstatus() == 4)):
             sim800.hangup()
+            calling = False
 
 
 ##### General INFO : BATTERY & BT #####
