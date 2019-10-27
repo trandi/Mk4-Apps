@@ -112,9 +112,9 @@ pinBellEnable = Pin(Pin.GPIO_ETHLED1, Pin.OUT)
 pinBell = Pin(Pin.GPIO_ETHLED0, Pin.OUT)
 timeLastBellMove = 0
 timeLastFreqRefresh = 0
-bellFreqHz1 = 70
-bellFreqHz2 = 30
-bellFreqHz = 1
+bellFreqHz1 = 60
+bellFreqHz2 = 40
+bellFreqHz = 0.1
 ringBell = False
 bellState = 0   # 0 - pause, 1 - ring freq1, 2 - ring freq2
 
@@ -133,10 +133,10 @@ def updateBell(currentTimeMs):
 
     global bellState, timeLastFreqRefresh, bellFreqHz1, bellFreqHz2
     # change the frequency and update display rarely
-    if(currentTimeMs - timeLastFreqRefresh > 1000):
+    if(currentTimeMs - timeLastFreqRefresh > 1500):
         bellState = (bellState + 1) % 3
         if(bellState == 0):
-            bellFreqHz = 1
+            bellFreqHz = 0.1
         elif(bellState == 1):
             bellFreqHz = bellFreqHz1
         else:
@@ -147,18 +147,18 @@ def updateBell(currentTimeMs):
         timeLastFreqRefresh = currentTimeMs
     
 
-# Change freq of ring
-pinJoystickDown = Pin(Pin.GPIO_JOYD, Pin.IN) # PullDown, BothEdges       
+# # Change freq of ring
+# pinJoystickDown = Pin(Pin.GPIO_JOYD, Pin.IN) # PullDown, BothEdges       
 
-def callbackJoystickDown(p):
-    global bellFreqHz
-    if(bellFreqHz > 10):
-        bellFreqHz = bellFreqHz - 10
-    else:
-        bellFreqHz = 80
+# def callbackJoystickDown(p):
+#     global bellFreqHz
+#     if(bellFreqHz > 10):
+#         bellFreqHz = bellFreqHz - 10
+#     else:
+#         bellFreqHz = 80
 
-# external interrupts from the Joystick
-pinJoystickDown.irq(handler=callbackJoystickDown)
+# # external interrupts from the Joystick
+# pinJoystickDown.irq(handler=callbackJoystickDown)
 
 
 
